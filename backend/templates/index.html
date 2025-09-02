@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Stock Sentiment Analyzer (Python)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top: 4px solid #a5b4fc;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-300 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-4xl bg-slate-800/50 border border-slate-700 rounded-lg shadow-2xl p-6 md:p-8 backdrop-blur-sm">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-indigo-500">
+                Real-Time Stock Sentiment Analyzer
+            </h1>
+            <p class="text-slate-400 mt-2">Powered by Python, Flask, and Tweepy</p>
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+            <input type="text" id="stockTickerInput" placeholder="e.g., AAPL, TSLA, GOOGL" class="flex-grow bg-slate-900/70 border border-slate-600 text-white rounded-md px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all duration-300" value="TSLA">
+            <button id="searchButton" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-md flex items-center justify-center transition-colors duration-300 shadow-lg shadow-indigo-600/20">
+                <span id="buttonText">Analyze Sentiment</span>
+                <div id="loader" class="loader hidden ml-3"></div>
+            </button>
+        </div>
+
+        <div id="statusMessage" class="hidden bg-rose-500/10 border border-rose-500/30 text-rose-300 text-sm rounded-md p-3 mb-6 text-center"></div>
+
+        <div id="resultsContainer" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-center">
+                <div class="bg-slate-900/50 p-4 rounded-md border border-slate-700">
+                    <h3 class="text-slate-400 text-sm font-medium uppercase tracking-wider">Stock Ticker</h3>
+                    <p id="tickerDisplay" class="text-2xl font-bold text-white">-</p>
+                </div>
+                <div class="bg-slate-900/50 p-4 rounded-md border border-slate-700">
+                    <h3 class="text-slate-400 text-sm font-medium uppercase tracking-wider">Current Sentiment</h3>
+                    <p id="sentimentScore" class="text-2xl font-bold text-white">-</p>
+                </div>
+                <div class="bg-slate-900/50 p-4 rounded-md border border-slate-700">
+                    <h3 class="text-slate-400 text-sm font-medium uppercase tracking-wider">Overall Trend</h3>
+                    <p id="sentimentTrend" class="text-2xl font-bold text-white">-</p>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/50 p-4 rounded-md mb-6 border border-slate-700">
+                <canvas id="sentimentChart"></canvas>
+            </div>
+
+            <div id="aiPredictionContainer" class="bg-slate-900/50 p-6 rounded-md text-center border border-indigo-500/30">
+                <h3 class="text-lg font-bold text-indigo-400 mb-2 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    AI Market Prediction
+                </h3>
+                <p class="text-slate-400 text-sm mb-4">Based on recent sentiment trends.</p>
+                <div class="flex items-center justify-center space-x-4">
+                    <div id="predictionIcon" class="w-10 h-10"></div>
+                    <div>
+                        <p id="predictionText" class="text-3xl font-bold">-</p>
+                        <p class="text-slate-400 text-sm">Confidence: <span id="predictionConfidence" class="font-semibold">-</span></p>
+                    </div>
+                </div>
+                 <p class="text-xs text-yellow-400/60 mt-4">Disclaimer: This is a simulated prediction and not financial advice.</p>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const stockTickerInput = document.getElementById('stockTickerInput');
+        const searchButton = document.getElementById('searchButton');
+        const buttonText = document.getElementById('buttonText');
+        const loader = document.getElementById('loader');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const statusMessage = document.getElementById('statusMessage');
+        const tickerDisplay = document.getElementById('tickerDisplay');
+        const sentimentScore = document.getElementById('sentimentScore');
+        const sentimentTrend = document.getElementById('sentimentTrend');
+        const predictionTextEl = document.getElementById('predictionText');
+        const predictionConfidenceEl = document.getElementById('predictionConfidence');
+        const predictionIconEl = document.getElementById('predictionIcon');
+        const chartCanvas = document.getElementById('sentimentChart');
+        let sentimentChartInstance = null;
+
+        // --- API CALL TO OUR PYTHON/FLASK BACKEND ---
+        const fetchSentimentData = async (ticker) => {
+            // This is the only line that needs to change!
+            // It now points to the endpoint on our Flask server.
+            const backendUrl = `/analyze?ticker=${ticker}`; 
+            const response = await fetch(backendUrl);
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            return await response.json();
+        };
+
+        // --- SIMULATED AI PREDICTION LOGIC (No changes needed here) ---
+        const getAIPrediction = (data) => {
+            if (!data || data.length < 2) return { prediction: 'Stable', confidence: '70.0%' };
+            const lastPoints = data.slice(-5);
+            const startScore = lastPoints[0].score;
+            const endScore = lastPoints[lastPoints.length - 1].score;
+            const trend = endScore - startScore;
+            let prediction = 'Stable', confidence = 75 + Math.random() * 10;
+            if (trend > 0.3) { prediction = 'Up'; confidence = 85 + Math.random() * 10; } 
+            else if (trend < -0.3) { prediction = 'Down'; confidence = 85 + Math.random() * 10; }
+            return { prediction, confidence: confidence.toFixed(1) + '%' };
+        };
+        
+        // --- UI LOGIC (No changes needed here) ---
+        const handleSearch = async () => {
+            const ticker = stockTickerInput.value.trim().toUpperCase();
+            if (!ticker) {
+                statusMessage.textContent = 'Please enter a stock ticker.';
+                statusMessage.classList.remove('hidden');
+                return;
+            }
+            buttonText.textContent = 'Analyzing...';
+            loader.classList.remove('hidden');
+            searchButton.disabled = true;
+            resultsContainer.classList.add('hidden');
+            statusMessage.classList.add('hidden');
+            try {
+                const result = await fetchSentimentData(ticker);
+                updateUI(result);
+            } catch (error) {
+                console.error("Failed to fetch sentiment data:", error);
+                statusMessage.textContent = error.message;
+                statusMessage.classList.remove('hidden');
+            } finally {
+                buttonText.textContent = 'Analyze Sentiment';
+                loader.classList.add('hidden');
+                searchButton.disabled = false;
+            }
+        };
+
+        const updateUI = (result) => {
+            const { ticker, data } = result;
+            if (!data || data.length === 0) {
+                 statusMessage.textContent = `No data available for ${ticker}.`;
+                 statusMessage.classList.remove('hidden');
+                 resultsContainer.classList.add('hidden');
+                 return;
+            }
+            const latestScore = data[data.length - 1].score;
+            const averageScore = data.reduce((sum, point) => sum + point.score, 0) / data.length;
+            tickerDisplay.textContent = ticker;
+            sentimentScore.textContent = latestScore.toFixed(3);
+            let trend, scoreColor;
+            if (averageScore > 0.15) { trend = 'Positive'; scoreColor = 'text-green-400'; } 
+            else if (averageScore < -0.15) { trend = 'Negative'; scoreColor = 'text-red-400'; } 
+            else { trend = 'Neutral'; scoreColor = 'text-slate-300'; }
+            sentimentTrend.textContent = trend;
+            sentimentTrend.className = `text-2xl font-bold ${scoreColor}`;
+            sentimentScore.className = `text-2xl font-bold ${latestScore > 0.05 ? 'text-green-400' : latestScore < -0.05 ? 'text-red-400' : 'text-slate-300'}`;
+            const predictionResult = getAIPrediction(data);
+            predictionTextEl.textContent = predictionResult.prediction;
+            predictionConfidenceEl.textContent = predictionResult.confidence;
+            let icon, color;
+            if (predictionResult.prediction === 'Up') {
+                icon = `<svg class="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19V5m0 0l-7 7m7-7l7 7"></path></svg>`;
+                color = 'text-green-400';
+            } else if (predictionResult.prediction === 'Down') {
+                icon = `<svg class="w-10 h-10 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m0 0l-7-7m7 7l7 7"></path></svg>`;
+                color = 'text-red-400';
+            } else {
+                icon = `<svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16"></path></svg>`;
+                color = 'text-slate-300';
+            }
+            predictionIconEl.innerHTML = icon;
+            predictionTextEl.className = `text-3xl font-bold ${color}`;
+            renderChart(data);
+            resultsContainer.classList.remove('hidden');
+        };
+
+        const renderChart = (data) => {
+            if (sentimentChartInstance) sentimentChartInstance.destroy();
+            const ctx = chartCanvas.getContext('2d');
+            sentimentChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(d => d.time), // X-axis is just a sequence now
+                    datasets: [{
+                        label: 'Sentiment Score',
+                        data: data.map(d => d.score),
+                        borderColor: (context) => {
+                            const chart = context.chart;
+                            const {ctx, chartArea} = chart;
+                            if(!chartArea) return null;
+                             const gradient = ctx.createLinearGradient(0, chartArea.bottom, 0, chartArea.top);
+                             gradient.addColorStop(0, 'rgb(251, 113, 133)');
+                             gradient.addColorStop(0.5, 'rgb(100, 116, 139)');
+                             gradient.addColorStop(1, 'rgb(52, 211, 153)');
+                             return gradient;
+                        },
+                        borderWidth: 2, pointRadius: 0, fill: false, tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    scales: {
+                        y: { min: -1, max: 1, grid: { color: 'rgba(100, 116, 139, 0.3)' }, ticks: { color: 'rgb(148, 163, 184)' } },
+                        x: { grid: { display: false }, ticks: { display: false } } // Hide x-axis labels
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                           enabled: true, mode: 'index', intersect: false, 
+                           backgroundColor: 'rgba(15, 23, 42, 0.8)',
+                           titleFont: { weight: 'bold'}, bodyFont: { size: 14},
+                           callbacks: {
+                               title: () => null, // Hide tooltip title
+                               label: (context) => `Score: ${context.parsed.y !== null ? context.parsed.y.toFixed(3) : 'N/A'}`
+                           }
+                        }
+                    }
+                }
+            });
+        };
+        searchButton.addEventListener('click', handleSearch);
+        stockTickerInput.addEventListener('keyup', (event) => { if (event.key === 'Enter') handleSearch(); });
+        window.onload = handleSearch;
+    </script>
+</body>
+</html>

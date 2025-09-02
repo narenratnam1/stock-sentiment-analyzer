@@ -1,0 +1,6 @@
+Flask
+tweepy
+vaderSentiment
+python-dotenv
+requests
+gunicorn

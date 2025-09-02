@@ -1,0 +1,9 @@
+# Ignore Python virtual environment
+venv/
+__pycache__/
+
+# Ignore environment variables file
+.env
+
+# Ignore macOS specific files
+.DS_Store
