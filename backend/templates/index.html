@@ -101,7 +101,7 @@
         const fetchSentimentData = async (ticker) => {
             // This is the only line that needs to change!
             // It now points to the endpoint on our Flask server.
-            const backendUrl = `https://naren-stock-analyzer.onrender.com/analyze?ticker=${ticker}`; 
+            const backendUrl = `https://naren-sentiment-analyzer.onrender.com=${ticker}`; 
             const response = await fetch(backendUrl);
             
             if (!response.ok) {
