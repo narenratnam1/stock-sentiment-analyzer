@@ -30,7 +30,7 @@ def analyze_sentiment():
 
     try:
         query = f'"${ticker}" lang:en -is:retweet'
-        response = client.search_recent_tweets(query, max_results=50)
+        response = client.search_recent_tweets(query, max_results=15)
         tweets = response.data
 
         if not tweets:
